@@ -2,9 +2,12 @@
 pragma solidity ^0.8.17;
 
 contract TrendsolBase{
+    //This is base contract holding enums, structs, constants etc.
+
     //Enums
 
     enum SaleStatus{
+        Null,                   //Sale does not exist
         Preparing,              //Seller is preparing the product
         Shipped,                //Seller has shipped the product
         Reached,                //Shipping company delivered the product
@@ -35,7 +38,7 @@ contract TrendsolBase{
         address customer;       //Customer's address
         uint productId;         //Id of the product being bought
         SaleStatus status;      //Status of the sale
-        
+        uint balance;
     }
 
     struct Seller{
@@ -54,14 +57,14 @@ contract Trendsol is TrendsolBase{
 
     mapping(address=>Seller) public sellers;                    //Seller => Seller
     mapping(address=>mapping(uint=>Product)) public products;   //Seller => Product ID => Product
+    mapping(address=>uint) public productCount;                 //Seller => Product Count (also used for id generation)
 
     ////Mappings > Private
     mapping(address => mapping(address => bool)) approvals;     //Person => Seller => Approved(bool)
-    
-    
-    mapping(address=>uint) productCount;                        //Seller => Product Count (also used for id generation)
-    mapping(address=>mapping(uint=>Sale)) sales;                //Seller => Sale ID => Sale
+    mapping(address => mapping(uint=>Sale)) sales;              //Seller => Sale ID => Sale
+    mapping(address => uint) saleCount;                         //Seller => Sale Count (also used for id generation)
     mapping(address => mapping(uint=>Sale)) orders;             //Customer => Sale ID => Sale
+    mapping(address => uint) orderCount;                        //Customer => Order Count (also used for id generation)
 
     //Modifiers
 
@@ -70,13 +73,28 @@ contract Trendsol is TrendsolBase{
         _;
     }
 
+    modifier MRegistered2(address _seller){
+        require(sellers[_seller].registered, "The seller is not registered.");
+        _;
+    }
+
     modifier MNotRegistered{
         require(!sellers[msg.sender].registered, "You are already registered as a seller.");
         _;
     }
 
-    modifier MRegistered2(address _seller){
-        require(sellers[_seller].registered, "The seller is not registered.");
+    modifier MOnMarket(uint _id){
+        require(products[msg.sender][_id].onMarket, "Product not found.");
+        _;
+    }
+
+    modifier MOnMarket2(address _seller, uint _id){
+        require(products[_seller][_id].onMarket, "Product not found.");
+        _;
+    }
+
+    modifier MSaleExists(uint _id){
+        require(sales[msg.sender][_id].status != SaleStatus.Null, "Sale does not exist");
         _;
     }
 
@@ -91,7 +109,7 @@ contract Trendsol is TrendsolBase{
         seller.contactNumber = _contactNumber;
     }
 
-    function edit(string calldata _tradeName, string calldata _contactNumber) external MRegistered{
+    function editAccount(string calldata _tradeName, string calldata _contactNumber) external MRegistered{
         Seller storage seller = sellers[msg.sender];
         seller.tradeName = _tradeName;
         seller.contactNumber = _contactNumber;
@@ -113,9 +131,26 @@ contract Trendsol is TrendsolBase{
         productCount[msg.sender] = count;
     }
 
+    function incStock(uint _id, uint _count) external MRegistered MOnMarket(_id){//Should be registered seller and product should be on market/registered
+        products[msg.sender][_id].stock += _count;
+    }
+
+    function decrStock(uint _id, uint _count) external MRegistered MOnMarket(_id){//Should be registered seller and product should be on market/registered
+        Product storage product = products[msg.sender][_id];
+        require(product.stock >= _count, "Stock is less than decrease amount");
+        products[msg.sender][_id].stock -= _count;
+    }
+
     function toggleSale(uint _id) external MRegistered{
         Product storage product = products[msg.sender][_id];
         product.onSale = !product.onSale;
+    }
+
+    ////Seller > Sale
+
+    function getSale(uint _id) external view MRegistered MSaleExists(_id) returns (address seller, address customer, uint productId, SaleStatus status){
+        Sale memory sale = sales[msg.sender][_id];
+        return (sale.seller, sale.customer, sale.productId, sale.status);
     }
 
     //Customer Section
@@ -126,10 +161,20 @@ contract Trendsol is TrendsolBase{
         require(sale.status == SaleStatus.Returned, "You cannot refund until the seller receives the product.");
     }
 
-    function buy(address _seller, uint _id) external MRegistered2(_seller) view{
+    function buy(address _seller, uint _id) payable external MRegistered2(_seller) MOnMarket2(_seller, _id){
         Product storage product = products[_seller][_id];
-        require(product.stock > 0, "Yeterli stok yok");
-
+        require(product.stock > 0, "No stock");
+        require(msg.value == product.price, "Product price is not paid");
+        Sale memory sale = Sale({
+            seller: _seller,
+            customer: msg.sender,
+            productId: _id,
+            status: SaleStatus.Preparing,
+            balance: msg.value
+        });
+        product.stock--;//Decrease stock
+        orders[msg.sender][++orderCount[msg.sender]] = sale;//Add order and increment order count of customer
+        sales[_seller][++saleCount[_seller]] = sale;//Add sale and increment sale count of seller
     }
 
     //Shared Section
