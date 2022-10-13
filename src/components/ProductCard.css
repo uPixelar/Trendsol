@@ -1,0 +1,27 @@
+.product_card{
+    background-color: dimgray;
+    display: flex;
+    flex-direction: column;
+    width: fit-content;
+    border-radius: 20px;
+    min-width: 250px;
+    min-height: 150px;
+    margin: 10px;
+}
+
+.product_card_name{
+    color: wheat;
+    background-color: blueviolet;
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
+    font-size: 1.2em;
+    padding: 5px;
+    text-align: center;
+}
+.product_card_details{
+    padding: 12px 24px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    height: 100%;
+}
