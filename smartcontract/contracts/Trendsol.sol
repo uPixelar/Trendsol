@@ -4,6 +4,10 @@ pragma solidity ^0.8.17;
 contract TrendsolBase {
     //This is the base contract holding enums, structs, constants etc.
 
+    //Events
+    event SellerRegistered(address indexed _seller)
+    event ProductAdded(address indexed _seller, uint indexed _id, string _name)
+
     //Enums
 
     enum SaleStatus {
@@ -125,6 +129,7 @@ contract Trendsol is TrendsolBase {
 
         allSellers.push(seller);
         sellers[msg.sender] = id;
+        emit SellerRegistered(msg.sender)
     }
 
     function setTradeName(string calldata _tradeName) external MRegistered {
@@ -160,6 +165,7 @@ contract Trendsol is TrendsolBase {
 
         allProducts.push(product);
         products[msg.sender].push(id);
+        emit ProductAdded(msg.sender, id, _name)
     }
 
     function incStock(uint _id, uint _count)
